@@ -54,9 +54,9 @@ class Setup:
     def __init__(self) -> None:
         if not os.path.isdir(INSTANCE_PATH):
             os.makedirs(INSTANCE_PATH)
-        else:
-            for i in os.listdir(INSTANCE_PATH):
-                os.remove(rf"{INSTANCE_PATH}\{i}")
+        # else:
+        #     for i in os.listdir(INSTANCE_PATH):
+        #         os.remove(rf"{INSTANCE_PATH}\{i}")
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
@@ -121,8 +121,8 @@ class Setup:
                 self.ssh_key_copy_to_host()
             self.os_update_upgrade()
             self.ssh_connection_make_secure()
-            self.host_ssh_port = self.settings.sshd_config["Port"]
-            self.firewall_setup()
+        self.host_ssh_port = self.settings.sshd_config["Port"]
+        self.firewall_setup()
         self.apps_install()
 
     def sshkey_check(self):
@@ -148,17 +148,17 @@ class Setup:
         """
         if self.port_check(
             (
-                (
-                    self.settings.host["ip_address"],
-                    self.settings.sshd_config["port_before_setup"],
-                )
+
+                self.settings.host["ip_address"],
+                self.settings.sshd_config["port_before_setup"]
+
             )
         ):
             return self.settings.sshd_config["port_before_setup"]
         if self.port_check(
             (
                 self.settings.host["ip_address"],
-                self.settings.sshd_config["Port"],
+                self.settings.sshd_config["Port"]
             )
         ):
             return self.settings.sshd_config["Port"]
@@ -259,25 +259,61 @@ class Setup:
             ) as file:
                 file.write(data)
 
-        self.powershell(
-            [
-                f"scp -P {str(self.settings.sshd_config['Port'])} "
-                f"{INSTANCE_NFTABLE_FILE} {self.settings.host['admin_user']}"
-                f"@{self.settings.host['ip_address']}:/etc/"
-            ]
-        )
+        self.scp(INSTANCE_NFTABLE_FILE, "/etc/")
+
         self.ssh_commands(["/usr/sbin/nft -f /etc/nftables.conf"])
         self.ssh_commands(["systemctl enable nftables"])
         self.ssh_commands(["systemctl start nftables"])
 
     def os_update_upgrade(self):
         self.logger.info("Host : Update and upgrade software")
-        return self.ssh_commands(["apt-get -qq update && apt-get -qq upgrade"])
+        self.ssh_commands(["apt-get -qq update && apt-get -qq upgrade"])
 
     def apps_install(self):
         for app_install in self.settings.app_host:
             self.logger.info("Host : App install %s", app_install["name"])
-            self.ssh_commands([f"apt-get install -qq {app_install["name"]}"])
+            r = self.ssh_commands(
+                                [f"apt-get install -qq {app_install["name"]}"],
+                                check=False)
+            if r.returncode:
+                print(f"app not installed {app_install["name"]} - {r.stderr}")
+            if hasattr(self, f"{app_install['name']}_setup"):
+                print(f"{app_install['name']}_setup")
+            if hasattr(self, f"{app_install['name']}_setup"):
+                func = getattr(self, f"{app_install['name']}_setup")
+                func()
+
+    def nginx_setup(self):
+        self.logger.info("HOST: Nginx : Setup")
+        cmds = [
+            "systemctl start nginx",
+            "systemctl enable nginx",
+        ]
+        for cmd in cmds:
+            self.ssh_commands([cmd])
+
+        # Firewall
+        with open(
+            INSTANCE_NFTABLE_FILE, "r+", newline="\n", encoding="utf-8"
+        ) as f:
+            new_file_contents = ""
+            for line in f.readlines():
+                if "##WEBHOST##" in line:
+                    new_file_contents += line.replace(
+                        "##WEBHOST##",
+                        'tcp dport 80 accept comment "accept http"',
+                    )
+                    new_file_contents += (
+                        "tcp dport 443 accept comment" '"accept https"'
+                    )
+                else:
+                    new_file_contents += line
+            f.seek(0)
+            f.truncate()
+            f.write(new_file_contents)
+        self.scp(INSTANCE_NFTABLE_FILE, "/etc/")
+
+        self.ssh_commands(["/usr/sbin/nft -f /etc/nftables.conf"])
 
     @staticmethod
     def powershell(cmds: list, check=True) -> subprocess.CompletedProcess:
@@ -304,7 +340,8 @@ class Setup:
         )
         return result
 
-    def ssh_commands(self, cmds: list, check=True) -> int:
+    def ssh_commands(
+            self, cmds: list, check=True) -> subprocess.CompletedProcess:
         cmds_reformatted = [cmd + ";" for cmd in cmds if not cmd.endswith(";")]
         ssh_cmd_list = [
             f"ssh {self.settings.host['admin_user']}@"
@@ -314,7 +351,14 @@ class Setup:
             + r'"'
         ]
 
-        return self.powershell(ssh_cmd_list, check=check).returncode
+        return self.powershell(ssh_cmd_list, check=check)
+
+    def scp(self, src: str, dst: str):
+        self.powershell([
+            f"scp -P {str(self.settings.sshd_config['Port'])} "
+            f"{src} {self.settings.host['admin_user']}"
+            f"@{self.settings.host['ip_address']}:{dst}"
+        ])
 
 
 if __name__ == "__main__":
