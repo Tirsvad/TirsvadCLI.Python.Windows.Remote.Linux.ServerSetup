@@ -123,6 +123,7 @@ class Setup:
             self.ssh_connection_make_secure()
             self.host_ssh_port = self.settings.sshd_config["Port"]
             self.firewall_setup()
+        self.apps_install()
 
     def sshkey_check(self):
         """Check if client have sshkey pair for secure connection else
@@ -272,6 +273,11 @@ class Setup:
     def os_update_upgrade(self):
         self.logger.info("Host : Update and upgrade software")
         return self.ssh_commands(["apt-get -qq update && apt-get -qq upgrade"])
+
+    def apps_install(self):
+        for app_install in self.settings.app_host:
+            self.logger.info("Host : App install %s", app_install["name"])
+            self.ssh_commands([f"apt-get install -qq {app_install["name"]}"])
 
     @staticmethod
     def powershell(cmds: list, check=True) -> subprocess.CompletedProcess:

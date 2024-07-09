@@ -29,8 +29,16 @@ class SettingsSshdConfig:
 
 
 @dataclass
+class SettingsAppInstall:
+    """Apps to be install on host settings"""
+
+    name: str | None = None
+
+
+@dataclass
 class Settings(JSONWizard):
     """Server configure settings"""
 
     host: SettingsHost
     sshd_config: SettingsSshdConfig
+    app_host: list[SettingsAppInstall]
