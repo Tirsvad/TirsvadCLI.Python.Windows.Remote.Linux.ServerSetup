@@ -5,66 +5,66 @@
 [![MIT License][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 <!-- REPLACE -->
-<!-- [TITLE] -->
-<!-- [FOLDER] -->
-<!-- [GITHUB REPO] -->
+<!-- Linux Server Setup -->
+<!-- ServerSetup -->
+<!-- TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup -->
 
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-    <a href="https://github.com/[GITHUB REPO]">
+    <a href="https://github.com/https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup">
         <img src="images/logo.png" alt="Logo" width="80" height="80">
     </a>
-    <h3 align="center">[TITLE]</h3>
+    <h3 align="center">Linux Server Setup</h3>
     <p align="center">
     <!-- PROJECT DESCRIPTION -->
     <br />
     <br />
     <!-- PROJECT SCREENSHOTS -->
     <!--
-    <a href="https://github.com/[GITHUB REPO]/blob/main/images/screenshot01.png">
+    <a href="https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/blob/main/images/screenshot01.png">
         <img src="images/screenshot01.png" alt="screenshot" width="120" height="120">
     </a>
     -->
     <br />
-    <a href="https://github.com/[GITHUB REPO]"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/[GITHUB REPO]/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
+    <a href="https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
     ·
-    <a href="https://github.com/[GITHUB REPO]/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
+    <a href="https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
 
   </p>
 </div>
 
-# [TITLE]
+# Linux Server Setup
 
-<!-- PROJECT DESCRIPTION -->
+This script can remte setup a linux server from Windows using powershell.
+
+What it can do now
+
+* Make SSH not to use password only keys.
+* Setup firewall (nftables).
 
 # Getting Started
 
-This is an example of how you may give instructions on setting up your project locally. To get a local copy up and
-running follow these simple example steps.
-
 ## Prerequisites
 
-You have python 3 installed.
+You have python3 installed for windows.
 
-## Installation
+## Download
 
-In a terminal do following
+To download source code from git hub we can oen a terminal.
 
-```console
-mkdir [FOLDER]
-curl -L https://api.github.com/repos/[GITHUB REPO]/tarball | tar -xz --strip-components=3 -C [FOLDER]
+```powershell
+Invoke-WebRequest https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/archive/refs/heads/main.zip -OutFile ServerSetup.zip
+Expand-Archive -Path ServerSetup.zip -DestinationPath .\
+Get-Item "*ServerSetup-*" | Rename-Item -NewName "ServerSetup"
+Set-Location .\ServerSetup\srv\ServerSetup
 ```
 
-For run the application go to the folder [FOLDER] and run.
-
-```commandline
-cd [FOLDER]
-python main.py
-```
+## Configure your server
+In the folder custom_files you may find setting.json whre you configure your server
 
 ## Contributing
 
@@ -86,7 +86,7 @@ Fork the Project
 
 Example
 
-```commandline
+```bash
 git checkout -b feature
 git commit -m 'Add my feature enhance to project'
 git push origin feature
@@ -95,25 +95,25 @@ git push origin feature
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
-[contributors-shield]: https://img.shields.io/github/contributors/[GITHUB REPO]?style=for-the-badge
+[contributors-shield]: https://img.shields.io/github/contributors/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup?style=for-the-badge
 
-[contributors-url]: https://github.com/[GITHUB REPO]/graphs/contributors
+[contributors-url]: https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/graphs/contributors
 
-[forks-shield]: https://img.shields.io/github/forks/[GITHUB REPO]?style=for-the-badge
+[forks-shield]: https://img.shields.io/github/forks/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup?style=for-the-badge
 
-[forks-url]: https://github.com/[GITHUB REPO]/network/members
+[forks-url]: https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/network/members
 
-[stars-shield]: https://img.shields.io/github/stars/[GITHUB REPO]?style=for-the-badge
+[stars-shield]: https://img.shields.io/github/stars/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup?style=for-the-badge
 
-[stars-url]: https://github.com/[GITHUB REPO]/stargazers
+[stars-url]: https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/stargazers
 
-[issues-shield]: https://img.shields.io/github/issues/[GITHUB REPO]?style=for-the-badge
+[issues-shield]: https://img.shields.io/github/issues/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup?style=for-the-badge
 
-[issues-url]: https://github.com/[GITHUB REPO]/issues
+[issues-url]: https://github.com/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/issues
 
-[license-shield]: https://img.shields.io/github/license/[GITHUB REPO]?style=for-the-badge
+[license-shield]: https://img.shields.io/github/license/TirsvadCLI/Python.Windows.Remote.Linux.ServerSetup?style=for-the-badge
 
-[license-url]: https://github.com/[GITHUB REPO]/blob/master/LICENSE
+[license-url]: https://github.comTirsvadCLI/Python.Windows.Remote.Linux.ServerSetup/blob/master/LICENSE
 
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 

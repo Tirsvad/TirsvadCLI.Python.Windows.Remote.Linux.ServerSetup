@@ -1,0 +1,14 @@
+{
+  "host": {
+    "ip_address": "127.0.0.1",
+    "admin_user": "root",
+    "admin_password": "secret"
+  },
+  "sshd_config": {
+    "port_before_setup": 22,
+    "Port": 10222,
+    "PermitRootLogin": "yes",
+    "PasswordAuthentication": "no",
+    "UsePAM": "no"
+  }
+}
