@@ -10,5 +10,13 @@
     "PermitRootLogin": "yes",
     "PasswordAuthentication": "no",
     "UsePAM": "no"
-  }
+  },
+  "app_host": [
+    {
+      "name": "python3-venv"
+    },
+    {
+      "name": "nginx"
+    }
+  ]
 }

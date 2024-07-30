@@ -15,11 +15,15 @@ CUSTOMS_FILES_PATH = f"{BASE_PATH}custom_files{os.path.sep}"
 NFTABLE_FILE = os.path.realpath(
     f"{APP_FILES_PATH}nftables{os.path.sep}nftables.conf"
 )
-INIT_DONE_FILE = os.path.realpath(f"{CUSTOMS_FILES_PATH}.init_done")
+
 SETTINGS_FILE = os.path.realpath(f"{CUSTOMS_FILES_PATH}settings.json")
 SETTINGS_TEMPLATE_FILE = os.path.realpath(f"{BASE_PATH}settings.json")
+GUNICORN_SERVICE_TEMPLATE = os.path.realpath(
+    f"{APP_FILES_PATH}gunicorn{os.path.sep}service.template"
+)
 
 # INSTANCE FILE
+# INIT_DONE_FILE = os.path.realpath(f"{INSTANCE_PATH}.init_done")
 INSTANCE_NFTABLE_FILE = os.path.realpath(f"{INSTANCE_PATH}nftables.conf")
 INSTANCE_LOGGING_FILE = os.path.realpath(f"{INSTANCE_PATH}setup.log")
 

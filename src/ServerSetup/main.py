@@ -1,11 +1,20 @@
-"""Server setup where we are on windows and doing linux server setup
+"""Copyright (C) 2024 TirsvadCLI
 
-Raises:
-    OSError: Client is not on a compatible OS
-    ConnectionError: When we cannot connect server
+This file is part of ServerSetup.
 
-Returns:
-    _type_: _description_
+ServerSetup is free software; you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the Free
+Software Foundation; either version 2.1 of the License, or (at your option)
+any later version.
+
+ServerSetup is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with ServerSetup; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA.
 """
 
 import os
@@ -13,28 +22,38 @@ import sys
 import json
 import logging
 import subprocess
-import socket
+
+
 from pathlib import Path
+from paramiko.client import SSHClient, AutoAddPolicy
+from paramiko.ssh_exception import (
+    AuthenticationException,
+    NoValidConnectionsError,
+)
 
-from constants import INIT_DONE_FILE
-from constants import INSTANCE_LOGGING_FILE
-from constants import SETTINGS_FILE
-from constants import SSH_ASKPASS_FILE
-from constants import NFTABLE_FILE
-from constants import SETTINGS_TEMPLATE_FILE
-from constants import INSTANCE_NFTABLE_FILE
-
-from constants import INSTANCE_PATH
+from constants import (
+    SETTINGS_FILE,
+    INSTANCE_LOGGING_FILE,
+    NFTABLE_FILE,
+    SETTINGS_TEMPLATE_FILE,
+    INSTANCE_NFTABLE_FILE,
+    INSTANCE_PATH,
+)
 
 from models import Settings
 
+from ansi_code import AnsiCode
 
-sys.stdin.reconfigure(encoding="utf-8")
-sys.stdout.reconfigure(encoding="utf-8")
+if os.name == "nt":  # Only if we are running on Windows
+    from ctypes import windll
+
+    k = windll.kernel32
+    k.SetConsoleMode(k.GetStdHandle(-11), 7)
 
 
-class Setup:
-    """Server setup where we are on windows and doing linux server setup
+class ServerSetup:
+    """Server setup where we are on a windows client connected to a linux
+    server. Then we do server configuration / setup
 
     Raises:
         OSError: _description_
@@ -50,14 +69,31 @@ class Setup:
     logger: logging
     ssh_askpass_require: str
     ssh_askpass: str
+    ssh_client: SSHClient | None = None
 
     def __init__(self) -> None:
+        print("\nLinux Server Setup\n")
+
         if not os.path.isdir(INSTANCE_PATH):
             os.makedirs(INSTANCE_PATH)
-        else:
-            for i in os.listdir(INSTANCE_PATH):
-                os.remove(rf"{INSTANCE_PATH}\{i}")
+            self.init_run = True
 
+        self._init_logger()
+        self.logger.info("Host setup starting")
+
+        self._info_to_screen("Prepare custom files")
+        if not os.path.isfile(SETTINGS_FILE):
+            self.copy_settings_template()
+        self._info_done_to_sreen()
+
+        self._info_to_screen("Loading settings")
+        with open(SETTINGS_FILE, encoding="utf-8") as f:
+            self.settings = Settings.from_dict(json.load(f))
+        self.host_ssh_port = self.settings.sshd_config.port_before_setup
+        self._info_done_to_sreen()
+
+    def _init_logger(self):
+        """Initialize logger"""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
@@ -73,61 +109,58 @@ class Setup:
 
         sh = logging.StreamHandler(sys.stdout)
         sh.setFormatter(formatter)
+        sh.setLevel(logging.WARNING)
         self.logger.addHandler(sh)
 
-        self.logger.info("Host setup starting")
-        if not os.name == "nt":
-            raise OSError(f"OS {os.name} is not supported")
+    def _info_to_screen(self, msg: str):
+        print(f"[......] {msg}", end="")
 
-        if not os.path.isfile(INIT_DONE_FILE) or not os.path.isfile(
-            SETTINGS_FILE
-        ):
-            with open(INIT_DONE_FILE, "w", encoding="utf-8") as file:
-                pass
-            with open(SETTINGS_TEMPLATE_FILE, "rb") as file:
-                data = file.read()
-            with open(SETTINGS_FILE, "wb") as file:
-                file.write(data)
-            print(
-                f"We didn't find {SETTINGS_FILE}.\n"
-                "We created a new template you can edit\n"
-                f"You must make changes to {SETTINGS_FILE}"
-            )
-            sys.exit(0)
-
-        with open(SETTINGS_FILE, encoding="utf-8") as f:
-            self.settings = Settings(**json.load(f))
-
-        powershell_path = self.powershell(
-            ["(get-command pwsh.exe).Path"]
-        ).stdout.strip("\n")
-
-        # prepare for ssh with password
-        self.ssh_askpass = (
-            f'$Env:SSH_ASKPASS="{powershell_path} -noLogo '
-            f'-ExecutionPolicy unrestricted -file {SSH_ASKPASS_FILE}"'
+    def _info_done_to_sreen(self):
+        print(
+            f"\r{AnsiCode.CURSOR.RIGHT}{AnsiCode.FG_COLOR.GREEN} done ",
+            end=f"{AnsiCode.FG_COLOR.DEFAULT}\n",
         )
-        self.ssh_askpass_require = '$Env:SSH_ASKPASS_REQUIRE="force"'
+
+    def _info_failed_to_screen(self):
+        subprocess.call("", shell=True)
+        print(
+            f"\r{AnsiCode.CURSOR.RIGHT}{AnsiCode.FG_COLOR.RED}" f"FAILED",
+            end=f"{AnsiCode.FG_COLOR.DEFAULT}\n",
+        )
+
+    def copy_settings_template(self):
+        """Copy settigns.json template to custom file folder.
+        Then we exit script for user have to edit settigns.json.
+        """
+        with open(SETTINGS_TEMPLATE_FILE, "rb") as file:
+            data = file.read()
+        with open(SETTINGS_FILE, "wb") as file:
+            file.write(data)
+        self._info_failed_to_screen()
+        print(
+            f"\nWe didn't find {SETTINGS_FILE}.\n"
+            "We created a new template you must edit\n"
+            f"You must make changes to {SETTINGS_FILE}"
+        )
+        sys.exit(0)
 
     def run(self):
         """Setting up local client connetion and do setup for host"""
         self.sshkey_check()
-        self.host_ssh_port = self.ssh_avaible_check()
-        if (
-            self.host_ssh_port
-            == self.settings.sshd_config["port_before_setup"]
-        ):
-            if not self.ssh_connection_with_key_try():
-                self.ssh_key_copy_to_host()
-            self.os_update_upgrade()
-            self.ssh_connection_make_secure()
-            self.host_ssh_port = self.settings.sshd_config["Port"]
-            self.firewall_setup()
+        if self.connect_server() == "password":
+            self.ssh_key_copy_to_host()
+        self.os_update_upgrade()
+        self.ssh_connection_make_secure()
+        self.ssh_client.close()
+        self.connect_server()  # Use of new port
+        self.firewall_setup()
+        self.apps_install()
 
     def sshkey_check(self):
         """Check if client have sshkey pair for secure connection else
         we create the sshkey pair
         """
+        self._info_to_screen("Check for avaible pkey if none we create one")
         if not os.path.isfile(
             f"{Path.home()}{os.path.sep}.ssh{os.path.sep}id_rsa.pub"
         ):
@@ -137,144 +170,159 @@ class Setup:
                 f"-f {Path.home()}\\.ssh\\id_rsa -N '\"\"'"
             ]
             self.powershell(cmd)
+        self._info_done_to_sreen()
 
-    def ssh_avaible_check(self) -> int:
-        """Return the first avaible port of
-        Port before setup or Port efter setup
+    def connect_server(self) -> str:
+        """Connect Server through ssh. Keep connection as self.ssh_client
+
+        Raises:
+            AuthenticationException: We could not authenticate user!
 
         Returns:
-            int: Avaible port
+            str: returns login method password or key
         """
-        if self.port_check(
-            (
-                (
-                    self.settings.host["ip_address"],
-                    self.settings.sshd_config["port_before_setup"],
+        self._info_to_screen("Connect server through ssh")
+        self.ssh_client = SSHClient()
+        self.ssh_client.set_missing_host_key_policy(AutoAddPolicy())
+        # First try to connect with key
+        try:
+            login_method = "key"
+            self.ssh_client.connect(
+                self.settings.host.ip_address,
+                username=self.settings.host.admin_user,
+                port=self.settings.sshd_config.Port,
+            )
+
+        except NoValidConnectionsError:
+            # Try to connect with password
+            try:
+                login_method = "password"
+                self.ssh_client.connect(
+                    hostname=self.settings.host.ip_address,
+                    port=self.settings.sshd_config.port_before_setup,
+                    username=self.settings.host.admin_user,
+                    password=self.settings.host.admin_password,
                 )
-            )
-        ):
-            return self.settings.sshd_config["port_before_setup"]
-        if self.port_check(
-            (
-                self.settings.host["ip_address"],
-                self.settings.sshd_config["Port"],
-            )
-        ):
-            return self.settings.sshd_config["Port"]
-        self.logger.fatal("Can't connect host")
-        raise ConnectionError()
-
-    @staticmethod
-    def port_check(ip_port: tuple) -> bool:
-        """Check if port is avaible
-
-        Args:
-            ip_port (tuple): _description_
-
-        Returns:
-            bool: True if port is avaible
-        """
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(2)
-        return s.connect_ex(ip_port) == 0
-
-    def ssh_connection_with_key_try(self):
-
-        with open(SSH_ASKPASS_FILE, "w", encoding="utf-8") as f:
-            f.write(f'Write-Output "{self.settings.host["admin_password"]}"')
-
-        # Can we login with public key
-
-        test = self.powershell(
-            [
-                "ssh "
-                # "-o PubkeyAuthentication=yes "
-                "-o BatchMode=yes "
-                "-o StrictHostKeyChecking=no "
-                "-o ConnectTimeout=5 "
-                f"{self.settings.host['admin_user']}@"
-                f"{self.settings.host['ip_address']} "
-                f"-p {self.host_ssh_port} "
-                "exit"
-            ],
-            check=False,
-        )
-        if test.returncode:
-            self.logger.info("Can't use ssh key for login")
-            return False
+            except AuthenticationException as exc:
+                self._info_failed_to_screen()
+                raise AuthenticationException() from exc
         else:
-            return True
+            self.host_ssh_port = self.settings.sshd_config.Port
+        self._info_done_to_sreen()
+        return login_method
 
     def ssh_key_copy_to_host(self):
-        self.logger.info("Create ssh connection: Copy ssh key to host")
-        # params = "-o BatchMode=yes"
-        cmds = [
-            f"{self.ssh_askpass_require}",
-            f"{self.ssh_askpass}",
-            f"cat {Path.home()}\\.ssh\\id_rsa.pub | "
-            f"ssh {self.settings.host['admin_user']}@"
-            f"{self.settings.host['ip_address']} "
-            f"-p {self.settings.sshd_config['port_before_setup']} "
-            f"'cat >> ~/.ssh/authorized_keys'",
-        ]
-        self.powershell(cmds)
+        """Copy ssh key to server and restart sshd"""
+        self._info_to_screen("Copy public ssh key to server")
+        with open(Path.home() / ".ssh" / "id_rsa.pub", encoding="utf-8") as f:
+            data = f.read()
+        self.ssh_command(
+            [
+                f"echo '{data}' >> ~/.ssh/authorized_keys",
+                "systemctl restart sshd",
+            ]
+        )
+        self._info_done_to_sreen()
 
     def ssh_connection_make_secure(self):
-        self.logger.info("Host : Securing ssh connection")
-        for key, value in self.settings.sshd_config.items():
+        """Change sshd setting on host so it only accepts key as
+        authentication. No password login
+        """
+        self._info_to_screen("Host: Securing ssh connection")
+        for key, value in self.settings.sshd_config.__dict__.items():
             if not key == "port_before_setup":
-                # cmd = r"pwsh -Command ssh root@161.97.108.95 -p 22
-                # 'sed -i '\"'s/#\?\(UsePAM\s*\).*$/\1 no/'\"'
-                # /etc/ssh/sshd_config'"
-                cmd = (
-                    r"pwsh -Command ssh "
-                    # "ssh "
-                    + self.settings.host["admin_user"]
-                    + r"@"
-                    + self.settings.host["ip_address"]
-                    + r" -p "
-                    + str(self.host_ssh_port)
-                    + r" 'sed -i '\"'s/#\?\("
-                    + key
-                    + r"\s*\).*$/\1 "
-                    + str(value)
-                    + r"/'\"' /etc/ssh/sshd_config'"
+                self.ssh_command(
+                    [
+                        str(
+                            r'sed -i "s/#\?\('
+                            + str(key)
+                            + r"\s*\).*$/\1 "
+                            + str(value)
+                            + r'/" /etc/ssh/sshd_config'
+                        )
+                    ]
                 )
-                # self.powershell([cmd]) # changing the script to not be valid!
-                subprocess.run(cmd, check=False)
-        cmd = ["systemctl restart ssh"]
-        self.ssh_commands(cmd)
+        self.ssh_command(["systemctl restart ssh"])
+        self._info_done_to_sreen()
 
     def firewall_setup(self):
-        self.logger.info("Host : Firewall setup")
+        """Simple firewall setup from template.
+        Adding sshd port.
+        """
+        self._info_to_screen("Host: Firewall setup")
         # create nftable file
         with open(NFTABLE_FILE, "r", encoding="utf-8") as f:
             data = f.read()
             data = data.replace(
-                "%SSH_PORT%", str(self.settings.sshd_config["Port"])
+                "%SSH_PORT%", str(self.settings.sshd_config.Port)
             )
             with open(
                 INSTANCE_NFTABLE_FILE, "w", newline="\n", encoding="utf-8"
             ) as file:
                 file.write(data)
 
-        self.powershell(
-            [
-                f"scp -P {str(self.settings.sshd_config['Port'])} "
-                f"{INSTANCE_NFTABLE_FILE} {self.settings.host['admin_user']}"
-                f"@{self.settings.host['ip_address']}:/etc/"
-            ]
-        )
-        self.ssh_commands(["/usr/sbin/nft -f /etc/nftables.conf"])
-        self.ssh_commands(["systemctl enable nftables"])
-        self.ssh_commands(["systemctl start nftables"])
+        self.scp(INSTANCE_NFTABLE_FILE, "/etc/")
+
+        self.ssh_command(["/usr/sbin/nft -f /etc/nftables.conf"])
+        self.ssh_command(["systemctl enable nftables"])
+        self.ssh_command(["systemctl start nftables"])
+        self._info_done_to_sreen()
 
     def os_update_upgrade(self):
-        self.logger.info("Host : Update and upgrade software")
-        return self.ssh_commands(["apt-get -qq update && apt-get -qq upgrade"])
+        """Update and upgrade host OS"""
+        self._info_to_screen("Host: Update and upgrade software")
+        self.ssh_command(["apt-get -qq update && apt-get -qq upgrade"])
+        self._info_done_to_sreen()
 
-    @staticmethod
-    def powershell(cmds: list, check=True) -> subprocess.CompletedProcess:
+    def apps_install(self):
+        """Install application from settings file to host"""
+        for app_install in self.settings.app_host:
+            self._info_to_screen(f"Host: Install {app_install.name}")
+            self.ssh_command([f"apt-get install -qq {app_install.name}"])
+            self._info_done_to_sreen()
+            if hasattr(self, f"app_{app_install.name}_setup"):
+                func = getattr(self, f"app_{app_install.name}_setup")
+                func()
+
+    def app_nginx_setup(self):
+        """Nginx settings.
+        Add firewall rules.
+        """
+        self._info_to_screen("HOST: Nginx setup")
+        cmds = [
+            "systemctl start nginx",
+            "systemctl enable nginx",
+        ]
+        for cmd in cmds:
+            self.ssh_command([cmd])
+
+        # Firewall
+        with open(
+            INSTANCE_NFTABLE_FILE, "r+", newline="\n", encoding="utf-8"
+        ) as f:
+            new_file_contents = ""
+            for line in f.readlines():
+                if "##WEBHOST##" in line:
+                    new_file_contents += line.replace(
+                        "##WEBHOST##",
+                        'tcp dport 80 accept comment "accept http"',
+                    )
+                    new_file_contents += (
+                        "tcp dport 443 accept comment" '"accept https"\n'
+                    )
+                else:
+                    new_file_contents += line
+            f.seek(0)
+            f.truncate()
+            f.write(new_file_contents)
+        self.scp(INSTANCE_NFTABLE_FILE, "/etc/")
+
+        self.ssh_command(["/usr/sbin/nft -f /etc/nftables.conf"])
+        self._info_done_to_sreen()
+
+    def powershell(
+        self, cmds: list, check=True
+    ) -> subprocess.CompletedProcess:
         """Shell script for windows
 
         Args:
@@ -288,7 +336,7 @@ class Setup:
         ]
         cmds_reformatted.insert(0, "pwsh")
         cmds_reformatted.insert(1, "-Command")
-        print(f"{' '.join(cmds_reformatted)}")
+        self.logger.info("powershell command: %s", " ".join(cmds_reformatted))
         result = subprocess.run(
             cmds_reformatted,
             encoding="utf-8",
@@ -298,19 +346,48 @@ class Setup:
         )
         return result
 
-    def ssh_commands(self, cmds: list, check=True) -> int:
-        cmds_reformatted = [cmd + ";" for cmd in cmds if not cmd.endswith(";")]
-        ssh_cmd_list = [
-            f"ssh {self.settings.host['admin_user']}@"
-            f"{self.settings.host['ip_address']} -p {self.host_ssh_port} "
-            + r'"DEBIAN_FRONTEND=noninteractive;'
-            + " ".join(cmds_reformatted)
-            + r'"'
-        ]
+    def ssh_command(self, cmds: list) -> any:
+        """Ssh command to host
 
-        return self.powershell(ssh_cmd_list, check=check).returncode
+        Args:
+            cmds (list): _description_
+
+        Returns:
+            any: _description_
+        """
+        for cmd in cmds:
+            stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
+            self.logger.info(
+                "ssh command: ssh %s@%s -p %s %s",
+                self.settings.host.admin_user,
+                self.settings.host.ip_address,
+                self.host_ssh_port,
+                cmd,
+            )
+            if not stdout.channel.recv_exit_status() == 0:
+                self._info_failed_to_screen()
+                print(f"ssh command failed with code {stderr}")
+                sys.exit()
+        stdin.close()
+        stdout.close()
+        stderr.close()
+
+    def scp(self, src: str, dst: str):
+        """Copy files to host
+
+        Args:
+            src (str): source file
+            dst (str): dst file
+        """
+        self.powershell(
+            [
+                f"scp -P {str(self.settings.sshd_config.Port)} "
+                f"{src} {self.settings.host.admin_user}"
+                f"@{self.settings.host.ip_address}:{dst}"
+            ]
+        )
 
 
 if __name__ == "__main__":
-    app = Setup()
+    app = ServerSetup()
     app.run()
